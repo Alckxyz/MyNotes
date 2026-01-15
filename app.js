@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom';
 import * as htmlToImage from 'html-to-image';
 import htm from 'htm';
+import * as Lucide from 'lucide-react';
 
 // New Modular Imports
 import { NoteType, AUDIO_CLICK, AUDIO_DELETE, playSound, decryptNote } from './constants.js';
@@ -9,16 +10,26 @@ import { ListView } from './components/ListView.js';
 import { TypePicker } from './components/TypePicker.js';
 import { NoteEditor } from './components/NoteEditor.js';
 import { UnlockModal } from './components/UnlockModal.js';
+import { 
+    auth, 
+    loginGoogle, 
+    logout, 
+    subscribeToNotes, 
+    createFirebaseNote, 
+    updateFirebaseNote, 
+    deleteFirebaseNote 
+} from './firebase.js';
 
 const html = htm.bind(React.createElement);
-
-// removed const AUDIO_CLICK = new Audio('click.mp3');
 // removed const AUDIO_DELETE = new Audio('delete.mp3');
 // removed const playSound = (audio) => { ... };
 // removed const NoteType = { ... };
 
 const App = () => {
+    const [user, setUser] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
     const [notes, setNotes] = useState([]);
+    const [localNotes, setLocalNotes] = useState([]);
     const [history, setHistory] = useState([]);
     const [view, setView] = useState('list'); // list, create-picker, edit
     const [editingNote, setEditingNote] = useState(null);
@@ -27,22 +38,64 @@ const App = () => {
     const autoLockTimer = useRef(null);
     const exportRef = useRef(null);
 
+    // Auth monitor
+    useEffect(() => {
+        return auth.onAuthStateChanged((u) => {
+            setUser(u);
+            setAuthLoading(false);
+        });
+    }, []);
+
+    // Load local notes on mount
+    useEffect(() => {
+        const saved = localStorage.getItem('local_notes_pro');
+        if (saved) {
+            try {
+                setLocalNotes(JSON.parse(saved));
+            } catch (e) {
+                console.error("Error loading local notes", e);
+            }
+        }
+    }, []);
+
+    // Save local notes when they change
+    useEffect(() => {
+        if (!user) {
+            localStorage.setItem('local_notes_pro', JSON.stringify(localNotes));
+        }
+    }, [localNotes, user]);
+
+    // Notes subscription
+    useEffect(() => {
+        if (!user) {
+            setNotes([]);
+            return;
+        }
+        return subscribeToNotes(user.uid, (fetchedNotes) => {
+            setNotes(fetchedNotes);
+        });
+    }, [user]);
+
+    const currentNotes = user ? notes : localNotes;
+
     const pushHistory = () => {
-        setHistory(prev => [JSON.parse(JSON.stringify(notes)), ...prev].slice(0, 50));
+        setHistory(prev => [JSON.parse(JSON.stringify(currentNotes)), ...prev].slice(0, 50));
     };
 
     const undo = () => {
         if (history.length === 0) return;
         const [lastState, ...rest] = history;
-        setNotes(lastState);
+        if (user) {
+            setNotes(lastState);
+        } else {
+            setLocalNotes(lastState);
+        }
         setHistory(rest);
         playSound(AUDIO_CLICK);
     };
 
-    React.useEffect(() => {
+    useEffect(() => {
         const handleKeyDown = (e) => {
-            // Only handle undo in list view here. 
-            // Editor handles its own undo for internal changes.
             if (view === 'list' && (e.ctrlKey || e.metaKey) && e.key === 'z') {
                 e.preventDefault();
                 undo();
@@ -50,7 +103,7 @@ const App = () => {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history, notes, view]);
+    }, [history, currentNotes, view, user]);
 
     const startCreate = () => {
         playSound(AUDIO_CLICK);
@@ -58,43 +111,67 @@ const App = () => {
     };
 
     const createNote = (type) => {
-        pushHistory();
         playSound(AUDIO_CLICK);
         const newNote = {
-            id: Date.now(),
+            id: Date.now(), // Local temporary ID
             type,
             title: '',
             subtitle: '',
             content: [],
-            createdAt: new Date()
         };
         setEditingNote(newNote);
         setView('edit');
     };
 
-    const saveNote = (updatedNote) => {
-        // We push history here because we are modifying the global note list
+    const saveNote = async (updatedNote) => {
         pushHistory();
-        setNotes(prev => {
-            const exists = prev.find(n => n.id === updatedNote.id);
-            if (exists) {
-                return prev.map(n => n.id === updatedNote.id ? updatedNote : n);
+        if (user) {
+            try {
+                if (updatedNote.id && typeof updatedNote.id === 'string' && updatedNote.id.length > 15) {
+                    await updateFirebaseNote(user.uid, updatedNote.id, updatedNote);
+                } else {
+                    await createFirebaseNote(user.uid, updatedNote);
+                }
+            } catch (e) {
+                console.error("Error saving to Firebase:", e);
+                alert("Error al sincronizar con la nube.");
             }
-            return [updatedNote, ...prev];
-        });
+        } else {
+            // Local save
+            setLocalNotes(prev => {
+                const existingIndex = prev.findIndex(n => n.id === updatedNote.id);
+                if (existingIndex > -1) {
+                    const next = [...prev];
+                    next[existingIndex] = updatedNote;
+                    return next;
+                }
+                return [updatedNote, ...prev];
+            });
+        }
         setView('list');
         setEditingNote(null);
     };
 
-    const deleteNote = (id) => {
+    const deleteNote = async (id) => {
         pushHistory();
         playSound(AUDIO_DELETE);
-        setNotes(prev => prev.filter(n => n.id !== id));
+        if (user) {
+            try {
+                await deleteFirebaseNote(user.uid, id);
+            } catch (e) {
+                console.error("Error deleting from Firebase:", e);
+            }
+        } else {
+            setLocalNotes(prev => prev.filter(n => n.id !== id));
+        }
     };
 
     const reorderNotes = (newNotes) => {
-        pushHistory();
-        setNotes(newNotes);
+        if (user) {
+            setNotes(newNotes);
+        } else {
+            setLocalNotes(newNotes);
+        }
     };
 
     const handleUnlock = async (pin) => {
@@ -163,11 +240,36 @@ const App = () => {
         }
     };
 
+    if (authLoading) {
+        return html`
+            <div style=${{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-color)' }}>
+                <div style=${{ textAlign: 'center' }}>
+                    <${Lucide.Loader2} className="animate-spin" size=${48} style=${{ marginBottom: '16px', color: 'var(--accent)' }} />
+                    <p>Cargando...</p>
+                </div>
+            </div>
+        `;
+    }
+
     return html`
         <div style=${{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             ${view === 'list' && html`
                 <${ListView} 
-                    notes=${notes} 
+                    notes=${currentNotes} 
+                    user=${user}
+                    onLogin=${async () => {
+                        try {
+                            await loginGoogle();
+                        } catch (e) {
+                            console.error(e);
+                            if (e.code === 'auth/unauthorized-domain') {
+                                alert("Error: Dominio no autorizado. Debes agregar 'websim.ai' (o el dominio actual) a la lista de 'Dominios autorizados' en tu Consola de Firebase > Authentication > Settings.");
+                            } else {
+                                alert("Error al iniciar sesión: " + e.message);
+                            }
+                        }
+                    }}
+                    onLogout=${logout}
                     onAdd=${startCreate} 
                     onEdit=${editNote} 
                     onDelete=${deleteNote}

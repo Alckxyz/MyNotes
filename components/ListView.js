@@ -5,8 +5,9 @@ import { NoteType, AUDIO_CLICK, playSound } from '../constants.js';
 
 const html = htm.bind(React.createElement);
 
-export const ListView = ({ notes, onAdd, onEdit, onDelete, onReorder, onUndo, hasHistory }) => {
+export const ListView = ({ notes, user, onLogin, onLogout, onAdd, onEdit, onDelete, onReorder, onUndo, hasHistory }) => {
     const [dragActiveId, setDragActiveId] = useState(null);
+    const [showProfile, setShowProfile] = useState(false);
 
     const handleDrop = (e, targetIndex) => {
         e.preventDefault();
@@ -24,7 +25,49 @@ export const ListView = ({ notes, onAdd, onEdit, onDelete, onReorder, onUndo, ha
     return html`
         <${React.Fragment}>
             <div style=${{ padding: '20px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h1 style=${{ fontSize: '24px' }}>My Notes</h1>
+                <div style=${{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    ${user ? html`
+                        <button 
+                            onClick=${() => setShowProfile(!showProfile)}
+                            style=${{ position: 'relative' }}
+                        >
+                            <img 
+                                src=${user.photoURL || 'https://www.gravatar.com/avatar/000?d=mp'} 
+                                style=${{ width: '32px', height: '32px', borderRadius: '16px', border: '2px solid var(--accent)' }} 
+                            />
+                            ${showProfile && html`
+                                <div style=${{
+                                    position: 'absolute', top: '40px', left: 0, 
+                                    background: '#222', padding: '12px', borderRadius: '12px',
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 100, width: '200px',
+                                    textAlign: 'left', border: '1px solid #444'
+                                }}>
+                                    <div style=${{ fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>${user.displayName}</div>
+                                    <div style=${{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>${user.email}</div>
+                                    <button 
+                                        onClick=${onLogout}
+                                        style=${{ color: 'var(--danger)', fontSize: '14px', width: '100%', justifyContent: 'flex-start' }}
+                                    >
+                                        <${Lucide.LogOut} size=${16} style=${{ marginRight: '8px' }} /> Sign Out
+                                    </button>
+                                </div>
+                            `}
+                        </button>
+                    ` : html`
+                        <button 
+                            onClick=${onLogin}
+                            style=${{ 
+                                background: 'white', color: 'black', padding: '6px 12px', 
+                                borderRadius: '8px', fontSize: '12px', fontWeight: 'bold',
+                                display: 'flex', alignItems: 'center', gap: '6px'
+                            }}
+                        >
+                            <img src="https://www.google.com/favicon.ico" width="12" height="12" />
+                            Sign In
+                        </button>
+                    `}
+                    <h1 style=${{ fontSize: '20px' }}>My Notes</h1>
+                </div>
                 <div style=${{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button 
                         onClick=${onUndo} 
@@ -34,7 +77,7 @@ export const ListView = ({ notes, onAdd, onEdit, onDelete, onReorder, onUndo, ha
                     >
                         <${Lucide.Undo2} size=${22} />
                     </button>
-                    <span style=${{ color: 'var(--text-secondary)', fontSize: '14px' }}>${notes.length} notes</span>
+                    <span style=${{ color: 'var(--text-secondary)', fontSize: '14px' }}>${notes.length}</span>
                 </div>
             </div>
             
