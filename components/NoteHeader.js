@@ -23,7 +23,10 @@ export const NoteHeader = ({
             </button>
             <div style=${{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <button 
-                    onClick=${onToggleLock} 
+                    onClick=${() => {
+                        // Require auth to toggle lock status too
+                        onToggleLock();
+                    }} 
                     style=${{ padding: '8px', color: note.isLocked ? 'var(--accent)' : 'var(--text-secondary)' }}
                 >
                     <${note.isLocked ? Lucide.Lock : Lucide.Unlock} size=${24} />

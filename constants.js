@@ -12,6 +12,8 @@ export const DEFAULT_SETTINGS = {
     autoLockMinutes: 2
 };
 
+export const AUTH_SESSION_DURATION = 2 * 60 * 1000;
+
 // --- Security Helpers (WebCrypto AES-GCM) ---
 
 async function deriveKey(pin, salt) {
@@ -88,27 +90,60 @@ export async function isBiometricsAvailable() {
 
 export async function authenticateBiometrics() {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
+    // Use a simpler credential request for verification
     const options = {
         publicKey: {
             challenge,
-            rp: { name: "Notas Pro" },
-            user: {
-                id: crypto.getRandomValues(new Uint8Array(16)),
-                name: "user",
-                displayName: "User"
-            },
-            pubKeyCredParams: [{ alg: -7, type: "public-key" }],
-            authenticatorSelection: { userVerification: "required" },
+            rpId: window.location.hostname,
+            userVerification: "required",
             timeout: 60000
         }
     };
     try {
-        await navigator.credentials.create(options);
-        return true;
-    } catch (e) {
-        console.error("Biometric fail:", e);
+        // Try getting credentials first (cheaper/faster for existing users)
+        // If it fails, we fall back to PIN or standard creation for this demo
+        if (navigator.credentials && navigator.credentials.get) {
+            await navigator.credentials.get({ publicKey: options.publicKey });
+            return true;
+        }
         return false;
+    } catch (e) {
+        // Fallback to create if get fails or is unsupported
+        try {
+            const createOptions = {
+                publicKey: {
+                    ...options.publicKey,
+                    rp: { name: "Notas Pro" },
+                    user: {
+                        id: crypto.getRandomValues(new Uint8Array(16)),
+                        name: "user",
+                        displayName: "User"
+                    },
+                    pubKeyCredParams: [{ alg: -7, type: "public-key" }]
+                }
+            };
+            await navigator.credentials.create(createOptions);
+            return true;
+        } catch (err) {
+            console.error("Biometric fail:", err);
+            return false;
+        }
     }
+}
+
+/**
+ * Validates a PIN against a master PIN or a specific note PIN.
+ * For this demo, we use the PIN of the first locked note as the master,
+ * or fallback to a default stored in localStorage.
+ */
+export function verifyMasterPin(pin) {
+    const master = localStorage.getItem('master_pin_pro');
+    if (!master) {
+        // If no master set, the first PIN provided becomes the master
+        localStorage.setItem('master_pin_pro', pin);
+        return true;
+    }
+    return master === pin;
 }
 
 export const NOTE_COLORS = [

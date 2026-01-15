@@ -33,10 +33,24 @@ const App = () => {
     const [history, setHistory] = useState([]);
     const [view, setView] = useState('list'); // list, create-picker, edit
     const [editingNote, setEditingNote] = useState(null);
-    const [unlockingNote, setUnlockingNote] = useState(null);
+    const [authRequest, setAuthRequest] = useState(null); // { type, note, onSuccess }
     const [sessionPin, setSessionPin] = useState(null);
+    const [lastAuthTime, setLastAuthTime] = useState(0);
     const autoLockTimer = useRef(null);
     const exportRef = useRef(null);
+
+    const isSessionValid = () => {
+        const { AUTH_SESSION_DURATION } = import.meta.resolve('./constants.js');
+        return Date.now() - lastAuthTime < (2 * 60 * 1000); // 2 mins fallback if const not accessible
+    };
+
+    const requireAuth = (type, note, onSuccess) => {
+        if (isSessionValid()) {
+            onSuccess();
+            return;
+        }
+        setAuthRequest({ type, note, onSuccess });
+    };
 
     // Auth monitor
     useEffect(() => {
@@ -153,17 +167,20 @@ const App = () => {
     };
 
     const deleteNote = async (id) => {
-        pushHistory();
-        playSound(AUDIO_DELETE);
-        if (user) {
-            try {
-                await deleteFirebaseNote(user.uid, id);
-            } catch (e) {
-                console.error("Error deleting from Firebase:", e);
+        const noteToDelete = currentNotes.find(n => n.id === id);
+        requireAuth('delete', noteToDelete, async () => {
+            pushHistory();
+            playSound(AUDIO_DELETE);
+            if (user) {
+                try {
+                    await deleteFirebaseNote(user.uid, id);
+                } catch (e) {
+                    console.error("Error deleting from Firebase:", e);
+                }
+            } else {
+                setLocalNotes(prev => prev.filter(n => n.id !== id));
             }
-        } else {
-            setLocalNotes(prev => prev.filter(n => n.id !== id));
-        }
+        });
     };
 
     const reorderNotes = (newNotes) => {
@@ -175,24 +192,44 @@ const App = () => {
     };
 
     const handleUnlock = async (pin) => {
-        // If pin is AUTO_BIO, we use the sessionPin or ask for one if it's the first time
+        const { type, note, onSuccess } = authRequest;
         const pinToUse = pin === 'AUTO_BIO' ? sessionPin : pin;
-        
-        if (!pinToUse) {
-            alert("Por favor ingresa el PIN primero.");
-            return;
-        }
 
         try {
-            const decryptedContent = await decryptNote(unlockingNote.encryptedContent, pinToUse);
-            setSessionPin(pinToUse); // Cache for session
-            const unlockedNote = { ...unlockingNote, content: decryptedContent };
-            setEditingNote(unlockedNote);
-            setUnlockingNote(null);
-            setView('edit');
-            startAutoLockTimer();
+            // Case 1: Unlocking a locked note
+            if (note && note.isLocked && type === 'unlock') {
+                if (!pinToUse) {
+                    if (pin === 'AUTO_BIO') {
+                        // If user used biometrics but we don't have the session pin,
+                        // we need to ask for PIN at least once to decrypt the specific note.
+                        // However, per requirements, biometrics should suffice if possible.
+                        // We'll prompt them to enter the PIN if this specific note's decryption fails.
+                        alert("Biometría aceptada, pero se requiere el PIN para descifrar el contenido por primera vez.");
+                        return;
+                    }
+                }
+                const decryptedContent = await decryptNote(note.encryptedContent, pinToUse);
+                setSessionPin(pinToUse);
+                setLastAuthTime(Date.now());
+                setEditingNote({ ...note, content: decryptedContent });
+                setView('edit');
+                setAuthRequest(null);
+                startAutoLockTimer();
+                return;
+            }
+
+            // Case 2: General action authorization (edit/delete/toggleLock)
+            const { verifyMasterPin } = await import('./constants.js');
+            if (pin === 'AUTO_BIO' || verifyMasterPin(pin)) {
+                if (pin !== 'AUTO_BIO') setSessionPin(pin);
+                setLastAuthTime(Date.now());
+                setAuthRequest(null);
+                if (onSuccess) onSuccess();
+            } else {
+                alert("PIN Incorrecto");
+            }
         } catch (e) {
-            alert("PIN Incorrecto");
+            alert("PIN Incorrecto o Error de descifrado");
         }
     };
 
@@ -211,10 +248,14 @@ const App = () => {
     const editNote = (note) => {
         playSound(AUDIO_CLICK);
         if (note.isLocked) {
-            setUnlockingNote(note);
+            requireAuth('unlock', note, () => {
+                // handleUnlock takes care of setting editing note for 'unlock' type
+            });
         } else {
-            setEditingNote({ ...note });
-            setView('edit');
+            requireAuth('edit', note, () => {
+                setEditingNote({ ...note });
+                setView('edit');
+            });
         }
     };
 
@@ -296,11 +337,12 @@ const App = () => {
                 />
             `}
 
-            ${unlockingNote && html`
+            ${authRequest && html`
                 <${UnlockModal} 
-                    noteTitle=${unlockingNote.title}
+                    noteTitle=${authRequest.note?.title}
+                    actionType=${authRequest.type}
                     onUnlock=${handleUnlock}
-                    onCancel=${() => setUnlockingNote(null)}
+                    onCancel=${() => setAuthRequest(null)}
                 />
             `}
         </div>

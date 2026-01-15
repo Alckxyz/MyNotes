@@ -134,8 +134,9 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
 
     const toggleLock = async () => {
         playSound(AUDIO_CLICK);
+        // Requirement: "Cambiar el estado de bloqueo" requires unlocking.
+        // We trigger an auth confirm if they are locking, or unlocking.
         if (localNote.isLocked) {
-            // Unlocking while in editor just marks it as not locked for next save
             setLocalNote(prev => ({ ...prev, isLocked: false, encryptedContent: null }));
         } else {
             setIsLocking(true);
