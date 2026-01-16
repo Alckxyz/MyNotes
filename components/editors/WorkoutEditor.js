@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as Lucide from 'lucide-react';
 import htm from 'htm';
-import { playSound, AUDIO_CLICK, AUDIO_DELETE } from '../../constants.js';
+
 
 const html = htm.bind(React.createElement);
 
@@ -10,7 +10,6 @@ export const WorkoutEditor = ({ content, onUpdateContent }) => {
     const routines = Array.isArray(content) ? content : [];
 
     const addRoutine = () => {
-        playSound(AUDIO_CLICK);
         const routineLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
         const nextLetter = routineLetters[routines.length] || `Extra ${routines.length + 1}`;
         const newRoutine = {
@@ -26,12 +25,10 @@ export const WorkoutEditor = ({ content, onUpdateContent }) => {
     };
 
     const removeRoutine = (id) => {
-        playSound(AUDIO_DELETE);
         onUpdateContent(routines.filter(r => r.id !== id));
     };
 
     const addExercise = (routineId) => {
-        playSound(AUDIO_CLICK);
         onUpdateContent(routines.map(r => {
             if (r.id === routineId) {
                 return {
@@ -71,7 +68,6 @@ export const WorkoutEditor = ({ content, onUpdateContent }) => {
     };
 
     const toggleSet = (routineId, exerciseId, setIndex) => {
-        playSound(AUDIO_CLICK);
         onUpdateContent(routines.map(r => {
             if (r.id === routineId) {
                 return {
@@ -91,7 +87,6 @@ export const WorkoutEditor = ({ content, onUpdateContent }) => {
     };
 
     const toggleExercise = (routineId, exerciseId) => {
-        playSound(AUDIO_CLICK);
         onUpdateContent(routines.map(r => {
             if (r.id === routineId) {
                 return {
@@ -106,7 +101,6 @@ export const WorkoutEditor = ({ content, onUpdateContent }) => {
     };
 
     const removeExercise = (routineId, exerciseId) => {
-        playSound(AUDIO_DELETE);
         onUpdateContent(routines.map(r => {
             if (r.id === routineId) {
                 return {
@@ -141,7 +135,6 @@ export const WorkoutEditor = ({ content, onUpdateContent }) => {
             }
 
             onUpdateContent(newRoutines);
-            playSound(AUDIO_CLICK);
         } catch (err) {
             console.error("Drop failed", err);
         }

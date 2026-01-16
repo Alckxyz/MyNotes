@@ -5,7 +5,7 @@ import htm from 'htm';
 import * as Lucide from 'lucide-react';
 
 // New Modular Imports
-import { NoteType, AUDIO_CLICK, AUDIO_DELETE, playSound, decryptNote } from './constants.js';
+import { NoteType, decryptNote } from './constants.js';
 import { ListView } from './components/ListView.js';
 import { TypePicker } from './components/TypePicker.js';
 import { NoteEditor } from './components/NoteEditor.js';
@@ -40,8 +40,7 @@ const App = () => {
     const exportRef = useRef(null);
 
     const isSessionValid = () => {
-        const { AUTH_SESSION_DURATION } = import.meta.resolve('./constants.js');
-        return Date.now() - lastAuthTime < (2 * 60 * 1000); // 2 mins fallback if const not accessible
+        return Date.now() - lastAuthTime < (2 * 60 * 1000);
     };
 
     const requireAuth = (type, note, onSuccess) => {
@@ -105,7 +104,6 @@ const App = () => {
             setLocalNotes(lastState);
         }
         setHistory(rest);
-        playSound(AUDIO_CLICK);
     };
 
     useEffect(() => {
@@ -120,12 +118,10 @@ const App = () => {
     }, [history, currentNotes, view, user]);
 
     const startCreate = () => {
-        playSound(AUDIO_CLICK);
         setView('create-picker');
     };
 
     const createNote = (type) => {
-        playSound(AUDIO_CLICK);
         const newNote = {
             id: Date.now(), // Local temporary ID
             type,
@@ -138,39 +134,49 @@ const App = () => {
     };
 
     const saveNote = async (updatedNote) => {
-        pushHistory();
-        if (user) {
-            try {
-                if (updatedNote.id && typeof updatedNote.id === 'string' && updatedNote.id.length > 15) {
-                    await updateFirebaseNote(user.uid, updatedNote.id, updatedNote);
-                } else {
-                    await createFirebaseNote(user.uid, updatedNote);
+        const performSave = async (noteToSave) => {
+            pushHistory();
+            if (user) {
+                try {
+                    if (noteToSave.id && typeof noteToSave.id === 'string' && noteToSave.id.length > 15) {
+                        await updateFirebaseNote(user.uid, noteToSave.id, noteToSave);
+                    } else {
+                        await createFirebaseNote(user.uid, noteToSave);
+                    }
+                } catch (e) {
+                    console.error("Error saving to Firebase:", e);
+                    alert("Error al sincronizar con la nube.");
                 }
-            } catch (e) {
-                console.error("Error saving to Firebase:", e);
-                alert("Error al sincronizar con la nube.");
+            } else {
+                // Local save
+                setLocalNotes(prev => {
+                    const existingIndex = prev.findIndex(n => n.id === noteToSave.id);
+                    if (existingIndex > -1) {
+                        const next = [...prev];
+                        next[existingIndex] = noteToSave;
+                        return next;
+                    }
+                    return [noteToSave, ...prev];
+                });
             }
+            setView('list');
+            setEditingNote(null);
+        };
+
+        // Check if note is existing (for authentication requirement on edit)
+        const isExisting = currentNotes.some(n => n.id === updatedNote.id);
+        
+        if (isExisting) {
+            requireAuth('save', updatedNote, () => performSave(updatedNote));
         } else {
-            // Local save
-            setLocalNotes(prev => {
-                const existingIndex = prev.findIndex(n => n.id === updatedNote.id);
-                if (existingIndex > -1) {
-                    const next = [...prev];
-                    next[existingIndex] = updatedNote;
-                    return next;
-                }
-                return [updatedNote, ...prev];
-            });
+            performSave(updatedNote);
         }
-        setView('list');
-        setEditingNote(null);
     };
 
     const deleteNote = async (id) => {
         const noteToDelete = currentNotes.find(n => n.id === id);
         requireAuth('delete', noteToDelete, async () => {
             pushHistory();
-            playSound(AUDIO_DELETE);
             if (user) {
                 try {
                     await deleteFirebaseNote(user.uid, id);
@@ -245,17 +251,25 @@ const App = () => {
         }, 2 * 60 * 1000); // 2 minutes
     };
 
-    const editNote = (note) => {
-        playSound(AUDIO_CLICK);
+    const editNote = async (note) => {
         if (note.isLocked) {
-            requireAuth('unlock', note, () => {
-                // handleUnlock takes care of setting editing note for 'unlock' type
-            });
+            // If we have a valid session and the PIN is known, try automatic decryption
+            if (isSessionValid() && sessionPin) {
+                try {
+                    const decryptedContent = await decryptNote(note.encryptedContent, sessionPin);
+                    setEditingNote({ ...note, content: decryptedContent });
+                    setView('edit');
+                    startAutoLockTimer();
+                    return;
+                } catch (e) {
+                    // Fallback to manual unlock if automatic fails
+                }
+            }
+            requireAuth('unlock', note, () => {});
         } else {
-            requireAuth('edit', note, () => {
-                setEditingNote({ ...note });
-                setView('edit');
-            });
+            // Normal notes open without authentication for viewing
+            setEditingNote({ ...note });
+            setView('edit');
         }
     };
 

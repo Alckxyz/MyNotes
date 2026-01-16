@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as Lucide from 'lucide-react';
 import htm from 'htm';
-import { playSound, AUDIO_CLICK } from '../../constants.js';
+
 
 const html = htm.bind(React.createElement);
 
@@ -38,7 +38,6 @@ export const ChecklistEditor = ({ content, onUpdateItem, onRemoveItem, onAddItem
         const [draggedItem] = newContent.splice(draggedIndex, 1);
         newContent.splice(targetIndex, 0, draggedItem);
         onReorder(newContent);
-        playSound(AUDIO_CLICK);
     };
 
     return html`

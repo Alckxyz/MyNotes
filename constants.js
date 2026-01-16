@@ -156,14 +156,8 @@ export const NOTE_COLORS = [
     { name: 'Teal', value: '#134e4a' }
 ];
 
-export const AUDIO_CLICK = new Audio('click.mp3');
-export const AUDIO_DELETE = new Audio('delete.mp3');
-export const AUDIO_MOVE = new Audio('click.mp3'); // Reusing click for move for now
+export const AUDIO_CLICK = null;
+export const AUDIO_DELETE = null;
+export const AUDIO_MOVE = null;
 
-export const playSound = (audio) => {
-    if (!audio) return;
-    try {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
-    } catch (e) {}
-};
+export const playSound = () => {};

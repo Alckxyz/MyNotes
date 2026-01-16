@@ -1,7 +1,7 @@
 import React from 'react';
 import * as Lucide from 'lucide-react';
 import htm from 'htm';
-import { NoteType, AUDIO_CLICK, playSound } from '../constants.js';
+import { NoteType } from '../constants.js';
 
 const html = htm.bind(React.createElement);
 
@@ -32,13 +32,13 @@ export const NoteHeader = ({
                     <${note.isLocked ? Lucide.Lock : Lucide.Unlock} size=${24} />
                 </button>
                 <button 
-                    onClick=${() => { playSound(AUDIO_CLICK); onToggleColorPicker(); }} 
+                    onClick=${() => { onToggleColorPicker(); }} 
                     style=${{ padding: '8px', color: note.color || 'var(--text-secondary)' }}
                 >
                     <${Lucide.Palette} size=${24} />
                 </button>
                 ${note.type === NoteType.LINKS && html`
-                    <button onClick=${() => { playSound(AUDIO_CLICK); onToggleSettings(); }} style=${{ padding: '8px', color: 'var(--text-secondary)' }}>
+                    <button onClick=${() => { onToggleSettings(); }} style=${{ padding: '8px', color: 'var(--text-secondary)' }}>
                         <${Lucide.Settings} size=${24} />
                     </button>
                 `}

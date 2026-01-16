@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as Lucide from 'lucide-react';
 import htm from 'htm';
-import { NoteType, AUDIO_CLICK, playSound } from '../constants.js';
+import { NoteType } from '../constants.js';
 
 const html = htm.bind(React.createElement);
 
@@ -107,7 +107,6 @@ export const ListView = ({ notes, user, onLogin, onLogout, onAdd, onEdit, onDele
                                     setDragActiveId(null);
                                 }}
                                 onClick=${() => {
-                                    playSound(AUDIO_CLICK);
                                     onEdit(note);
                                 }}
                                 style=${{ 

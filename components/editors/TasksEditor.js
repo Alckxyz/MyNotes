@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import * as Lucide from 'lucide-react';
 import htm from 'htm';
-import { playSound, AUDIO_CLICK, AUDIO_DELETE } from '../../constants.js';
+
 
 const html = htm.bind(React.createElement);
 
@@ -19,7 +19,6 @@ export const TasksEditor = ({ content, onUpdateContent }) => {
     const tasks = Array.isArray(content) ? content : [];
 
     const addTask = (afterId = null) => {
-        playSound(AUDIO_CLICK);
         const newTask = {
             id: Date.now(),
             text: '',
@@ -48,12 +47,10 @@ export const TasksEditor = ({ content, onUpdateContent }) => {
     };
 
     const removeTask = (id) => {
-        playSound(AUDIO_DELETE);
         onUpdateContent(tasks.filter(t => t.id !== id));
     };
 
     const handleCheck = (id) => {
-        playSound(AUDIO_CLICK);
         setRemovingIds(prev => new Set(prev).add(id));
         
         // Wait for animation

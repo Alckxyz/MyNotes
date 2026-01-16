@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as Lucide from 'lucide-react';
 import htm from 'htm';
-import { NoteType, AUDIO_CLICK, AUDIO_DELETE, playSound, DEFAULT_SETTINGS } from '../constants.js';
+import { NoteType, DEFAULT_SETTINGS } from '../constants.js';
 import { LinkSettings } from './LinkSettings.js';
 import { NoteHeader } from './NoteHeader.js';
 import { ColorPicker } from './ColorPicker.js';
@@ -44,7 +44,6 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
         const [lastState, ...rest] = history;
         setLocalNote(lastState);
         setHistory(rest);
-        playSound(AUDIO_CLICK);
     };
 
     React.useEffect(() => {
@@ -86,7 +85,6 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
 
     const restoreChecklist = () => {
         pushHistory();
-        playSound(AUDIO_CLICK);
         setLocalNote(prev => ({
             ...prev,
             content: prev.content.map(item => ({ 
@@ -100,7 +98,6 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
 
     const addItem = () => {
         pushHistory();
-        playSound(AUDIO_CLICK);
         const newItem = localNote.type === NoteType.CHECKLIST 
             ? { 
                 id: Date.now(), 
@@ -133,7 +130,6 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
     };
 
     const toggleLock = async () => {
-        playSound(AUDIO_CLICK);
         // Requirement: "Cambiar el estado de bloqueo" requires unlocking.
         // We trigger an auth confirm if they are locking, or unlocking.
         if (localNote.isLocked) {
@@ -162,7 +158,6 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
 
     const removeItem = (id) => {
         pushHistory();
-        playSound(AUDIO_DELETE);
         setLocalNote(prev => ({
             ...prev,
             content: prev.content.filter(item => item.id !== id)
@@ -305,13 +300,14 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
                         </div>
                     `)}
                     ${localNote.type === NoteType.TEXT && Array.isArray(localNote.content) && localNote.content.map((block, idx) => html`
-                        <div key=${block.id} style=${{ marginBottom: '10px', color: '#000000' }}>
-                            ${block.type === 'subtitle' && html`<h3 style=${{ fontSize: '18px', fontWeight: 'bold', color: '#000000' }}>${block.text}</h3>`}
+                        <div key=${block.id} style=${{ marginBottom: '4px', color: '#000000', lineHeight: '1.1' }}>
+                            ${block.type === 'subtitle' && html`<h3 style=${{ fontSize: '18px', fontWeight: 'bold', color: '#000000', marginBottom: '2px' }}>${block.text}</h3>`}
                             ${block.type === 'text' && html`<p>${block.text}</p>`}
                             ${block.type === 'bullet' && html`• ${block.text}`}
                             ${block.type === 'number' && html`${idx + 1}. ${block.text}`}
                             ${block.type === 'letter' && html`${String.fromCharCode(97 + (idx % 26))}. ${block.text}`}
                             ${block.type === 'todo' && html`${block.checked ? '☑' : '☐'} ${block.text}`}
+                            ${block.type === 'copyable' && html`📋 ${block.label ? block.label + ' ' : ''}${block.text}`}
                         </div>
                     `)}
                     ${localNote.type === NoteType.WORKOUT && Array.isArray(localNote.content) && localNote.content.map(routine => html`
