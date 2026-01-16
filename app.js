@@ -136,6 +136,11 @@ const App = () => {
     const saveNote = async (updatedNote) => {
         const performSave = async (noteToSave) => {
             pushHistory();
+
+            // Navigate back immediately for better UX
+            setView('list');
+            setEditingNote(null);
+
             if (user) {
                 try {
                     if (noteToSave.id && typeof noteToSave.id === 'string' && noteToSave.id.length > 15) {
@@ -145,7 +150,8 @@ const App = () => {
                     }
                 } catch (e) {
                     console.error("Error saving to Firebase:", e);
-                    alert("Error al sincronizar con la nube.");
+                    // Silently fail or log, as user has already moved back to list
+                    // Firebase handles offline persistence automatically
                 }
             } else {
                 // Local save
@@ -159,8 +165,6 @@ const App = () => {
                     return [noteToSave, ...prev];
                 });
             }
-            setView('list');
-            setEditingNote(null);
         };
 
         // Check if note is existing (for authentication requirement on edit)
