@@ -46,9 +46,15 @@ export const ListView = ({ notes, user, onLogin, onLogout, onAdd, onEdit, onDele
                                     <div style=${{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>${user.email}</div>
                                     <button 
                                         onClick=${onLogout}
-                                        style=${{ color: 'var(--danger)', fontSize: '14px', width: '100%', justifyContent: 'flex-start' }}
+                                        style=${{ color: 'var(--danger)', fontSize: '14px', width: '100%', justifyContent: 'flex-start', marginBottom: '8px' }}
                                     >
                                         <${Lucide.LogOut} size=${16} style=${{ marginRight: '8px' }} /> Sign Out
+                                    </button>
+                                    <button 
+                                        onClick=${() => { setShowProfile(false); window.dispatchEvent(new CustomEvent('change-pin')); }}
+                                        style=${{ color: 'var(--accent)', fontSize: '14px', width: '100%', justifyContent: 'flex-start' }}
+                                    >
+                                        <${Lucide.Lock} size=${16} style=${{ marginRight: '8px' }} /> Cambiar PIN
                                     </button>
                                 </div>
                             `}
@@ -69,6 +75,13 @@ export const ListView = ({ notes, user, onLogin, onLogout, onAdd, onEdit, onDele
                     <h1 style=${{ fontSize: '20px' }}>My Notes</h1>
                 </div>
                 <div style=${{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <button 
+                        onClick=${() => window.dispatchEvent(new CustomEvent('manual-lock'))}
+                        style=${{ color: 'var(--text-secondary)' }}
+                        title="Bloquear App"
+                    >
+                        <${Lucide.Lock} size=${22} />
+                    </button>
                     <button 
                         onClick=${onUndo} 
                         disabled=${!hasHistory}
@@ -128,11 +141,10 @@ export const ListView = ({ notes, user, onLogin, onLogout, onAdd, onEdit, onDele
                                         ${note.type === NoteType.TASKS && html`<${Lucide.ListTodo} size=${16} color="#ef4444" />`}
                                         <h3 style=${{ fontSize: '18px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             ${note.title || 'Untitled'}
-                                            ${note.isLocked && html`<${Lucide.Lock} size=${14} style=${{ marginLeft: '8px', opacity: 0.6 }} />`}
                                         </h3>
                                     </div>
                                     <p style=${{ color: note.color ? 'rgba(255,255,255,0.7)' : 'var(--text-secondary)', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        ${note.isLocked ? 'Contenido oculto 🔒' : (note.subtitle || 'No subtitle')}
+                                        ${note.subtitle || 'No subtitle'}
                                     </p>
                                 </div>
                                 <div style=${{ display: 'flex', alignItems: 'center', gap: '8px' }}>

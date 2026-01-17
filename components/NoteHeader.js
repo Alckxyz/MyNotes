@@ -10,7 +10,6 @@ export const NoteHeader = ({
     onSave, 
     onCancel, 
     onUndo, 
-    onToggleLock, 
     onToggleColorPicker, 
     onToggleSettings, 
     onExport,
@@ -22,15 +21,6 @@ export const NoteHeader = ({
                 <${Lucide.X} size=${24} />
             </button>
             <div style=${{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button 
-                    onClick=${() => {
-                        // Require auth to toggle lock status too
-                        onToggleLock();
-                    }} 
-                    style=${{ padding: '8px', color: note.isLocked ? 'var(--accent)' : 'var(--text-secondary)' }}
-                >
-                    <${note.isLocked ? Lucide.Lock : Lucide.Unlock} size=${24} />
-                </button>
                 <button 
                     onClick=${() => { onToggleColorPicker(); }} 
                     style=${{ padding: '8px', color: note.color || 'var(--text-secondary)' }}

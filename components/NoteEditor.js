@@ -57,9 +57,9 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [history, localNote]);
 
+
+
     const updateField = (field, value) => {
-        // Only push history for title/subtitle if it's the first change in a while to avoid character-by-character undo
-        // but for now let's keep it simple
         setLocalNote(prev => ({ ...prev, [field]: value }));
     };
 
@@ -129,32 +129,7 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
         }));
     };
 
-    const toggleLock = async () => {
-        // Requirement: "Cambiar el estado de bloqueo" requires unlocking.
-        // We trigger an auth confirm if they are locking, or unlocking.
-        if (localNote.isLocked) {
-            setLocalNote(prev => ({ ...prev, isLocked: false, encryptedContent: null }));
-        } else {
-            setIsLocking(true);
-        }
-    };
 
-    const handleConfirmLock = async (pin) => {
-        try {
-            const { encryptNote } = await import('../constants.js');
-            const encrypted = await encryptNote(localNote.content, pin);
-            setLocalNote(prev => ({
-                ...prev,
-                isLocked: true,
-                encryptedContent: encrypted,
-                content: [], // Clear plain content
-                lastPinUsed: pin // Temporary for this save session
-            }));
-            setIsLocking(false);
-        } catch (e) {
-            alert("Error al bloquear: " + e.message);
-        }
-    };
 
     const removeItem = (id) => {
         pushHistory();
@@ -180,7 +155,6 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
                 onCancel=${onCancel} 
                 onUndo=${undo}
                 canUndo=${history.length > 0}
-                onToggleLock=${toggleLock}
                 onToggleColorPicker=${() => setShowColorPicker(!showColorPicker)}
                 onToggleSettings=${() => setShowSettings(true)}
                 onExport=${handleExport}
@@ -194,12 +168,7 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
                 />
             `}
 
-            ${isLocking && html`
-                <${LockSetupModal} 
-                    onConfirm=${handleConfirmLock} 
-                    onCancel=${() => setIsLocking(false)} 
-                />
-            `}
+
 
             ${showColorPicker && html`
                 <${ColorPicker} 
@@ -209,7 +178,7 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
                 />
             `}
 
-            <div className="scroll-container" style=${{ opacity: localNote.isLocked ? 0.3 : 1, pointerEvents: localNote.isLocked ? 'none' : 'auto' }}>
+            <div className="scroll-container">
                 <input 
                     placeholder="Note Title" 
                     value=${localNote.title}

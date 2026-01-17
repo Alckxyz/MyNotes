@@ -10,6 +10,7 @@ import { ListView } from './components/ListView.js';
 import { TypePicker } from './components/TypePicker.js';
 import { NoteEditor } from './components/NoteEditor.js';
 import { UnlockModal } from './components/UnlockModal.js';
+import { LockSetupModal } from './components/LockSetupModal.js';
 import { 
     auth, 
     loginGoogle, 
@@ -29,54 +30,25 @@ const App = () => {
     const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [notes, setNotes] = useState([]);
-    const [localNotes, setLocalNotes] = useState([]);
     const [history, setHistory] = useState([]);
     const [view, setView] = useState('list'); // list, create-picker, edit
     const [editingNote, setEditingNote] = useState(null);
-    const [authRequest, setAuthRequest] = useState(null); // { type, note, onSuccess }
-    const [sessionPin, setSessionPin] = useState(null);
-    const [lastAuthTime, setLastAuthTime] = useState(0);
-    const autoLockTimer = useRef(null);
+    const [appUnlocked, setAppUnlocked] = useState(false);
+    const [hasStoredPin, setHasStoredPin] = useState(!!localStorage.getItem('app_pin'));
     const exportRef = useRef(null);
-
-    const isSessionValid = () => {
-        return Date.now() - lastAuthTime < (2 * 60 * 1000);
-    };
-
-    const requireAuth = (type, note, onSuccess) => {
-        if (isSessionValid()) {
-            onSuccess();
-            return;
-        }
-        setAuthRequest({ type, note, onSuccess });
-    };
 
     // Auth monitor
     useEffect(() => {
-        return auth.onAuthStateChanged((u) => {
+        return auth.onAuthStateChanged(async (u) => {
             setUser(u);
+            if (!u) {
+                setAppUnlocked(false);
+            }
             setAuthLoading(false);
         });
     }, []);
 
-    // Load local notes on mount
-    useEffect(() => {
-        const saved = localStorage.getItem('local_notes_pro');
-        if (saved) {
-            try {
-                setLocalNotes(JSON.parse(saved));
-            } catch (e) {
-                console.error("Error loading local notes", e);
-            }
-        }
-    }, []);
 
-    // Save local notes when they change
-    useEffect(() => {
-        if (!user) {
-            localStorage.setItem('local_notes_pro', JSON.stringify(localNotes));
-        }
-    }, [localNotes, user]);
 
     // Notes subscription
     useEffect(() => {
@@ -89,7 +61,7 @@ const App = () => {
         });
     }, [user]);
 
-    const currentNotes = user ? notes : localNotes;
+    const currentNotes = notes;
 
     const pushHistory = () => {
         setHistory(prev => [JSON.parse(JSON.stringify(currentNotes)), ...prev].slice(0, 50));
@@ -98,11 +70,7 @@ const App = () => {
     const undo = () => {
         if (history.length === 0) return;
         const [lastState, ...rest] = history;
-        if (user) {
-            setNotes(lastState);
-        } else {
-            setLocalNotes(lastState);
-        }
+        setNotes(lastState);
         setHistory(rest);
     };
 
@@ -113,11 +81,21 @@ const App = () => {
                 undo();
             }
         };
+        const handlePinChangeRequest = () => handleChangePin();
+        const handleManualLockRequest = () => setAppUnlocked(false);
+
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history, currentNotes, view, user]);
+        window.addEventListener('change-pin', handlePinChangeRequest);
+        window.addEventListener('manual-lock', handleManualLockRequest);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('change-pin', handlePinChangeRequest);
+            window.removeEventListener('manual-lock', handleManualLockRequest);
+        };
+    }, [history, currentNotes, view, user, editingNote]);
 
     const startCreate = () => {
+        if (!user) return alert("Inicia sesión para crear notas.");
         setView('create-picker');
     };
 
@@ -134,147 +112,65 @@ const App = () => {
     };
 
     const saveNote = async (updatedNote) => {
-        const performSave = async (noteToSave) => {
-            pushHistory();
-
-            // Navigate back immediately for better UX
-            setView('list');
-            setEditingNote(null);
-
-            if (user) {
-                try {
-                    if (noteToSave.id && typeof noteToSave.id === 'string' && noteToSave.id.length > 15) {
-                        await updateFirebaseNote(user.uid, noteToSave.id, noteToSave);
-                    } else {
-                        await createFirebaseNote(user.uid, noteToSave);
-                    }
-                } catch (e) {
-                    console.error("Error saving to Firebase:", e);
-                    // Silently fail or log, as user has already moved back to list
-                    // Firebase handles offline persistence automatically
-                }
-            } else {
-                // Local save
-                setLocalNotes(prev => {
-                    const existingIndex = prev.findIndex(n => n.id === noteToSave.id);
-                    if (existingIndex > -1) {
-                        const next = [...prev];
-                        next[existingIndex] = noteToSave;
-                        return next;
-                    }
-                    return [noteToSave, ...prev];
-                });
-            }
-        };
-
-        // Check if note is existing (for authentication requirement on edit)
-        const isExisting = currentNotes.some(n => n.id === updatedNote.id);
+        if (!user) return alert("Debes iniciar sesión para guardar.");
         
-        if (isExisting) {
-            requireAuth('save', updatedNote, () => performSave(updatedNote));
-        } else {
-            performSave(updatedNote);
+        pushHistory();
+        setView('list');
+        setEditingNote(null);
+
+        try {
+            if (updatedNote.id && typeof updatedNote.id === 'string' && updatedNote.id.length > 15) {
+                await updateFirebaseNote(user.uid, updatedNote.id, updatedNote);
+            } else {
+                await createFirebaseNote(user.uid, updatedNote);
+            }
+        } catch (e) {
+            console.error("Error saving to Firebase:", e);
         }
     };
 
     const deleteNote = async (id) => {
-        const noteToDelete = currentNotes.find(n => n.id === id);
-        requireAuth('delete', noteToDelete, async () => {
-            pushHistory();
-            if (user) {
-                try {
-                    await deleteFirebaseNote(user.uid, id);
-                } catch (e) {
-                    console.error("Error deleting from Firebase:", e);
-                }
-            } else {
-                setLocalNotes(prev => prev.filter(n => n.id !== id));
-            }
-        });
+        if (!user) return;
+        pushHistory();
+        try {
+            await deleteFirebaseNote(user.uid, id);
+        } catch (e) {
+            console.error("Error deleting from Firebase:", e);
+        }
     };
 
     const reorderNotes = (newNotes) => {
         if (user) {
             setNotes(newNotes);
+        }
+    };
+
+    const handleUnlock = (pin) => {
+        const stored = localStorage.getItem('app_pin');
+        if (pin === stored) {
+            setAppUnlocked(true);
         } else {
-            setLocalNotes(newNotes);
+            alert("PIN Incorrecto");
         }
     };
 
-    const handleUnlock = async (pin) => {
-        const { type, note, onSuccess } = authRequest;
-        const pinToUse = pin === 'AUTO_BIO' ? sessionPin : pin;
-
-        try {
-            // Case 1: Unlocking a locked note
-            if (note && note.isLocked && type === 'unlock') {
-                if (!pinToUse) {
-                    if (pin === 'AUTO_BIO') {
-                        // If user used biometrics but we don't have the session pin,
-                        // we need to ask for PIN at least once to decrypt the specific note.
-                        // However, per requirements, biometrics should suffice if possible.
-                        // We'll prompt them to enter the PIN if this specific note's decryption fails.
-                        alert("Biometría aceptada, pero se requiere el PIN para descifrar el contenido por primera vez.");
-                        return;
-                    }
-                }
-                const decryptedContent = await decryptNote(note.encryptedContent, pinToUse);
-                setSessionPin(pinToUse);
-                setLastAuthTime(Date.now());
-                setEditingNote({ ...note, content: decryptedContent });
-                setView('edit');
-                setAuthRequest(null);
-                startAutoLockTimer();
-                return;
-            }
-
-            // Case 2: General action authorization (edit/delete/toggleLock)
-            const { verifyMasterPin } = await import('./constants.js');
-            if (pin === 'AUTO_BIO' || verifyMasterPin(pin)) {
-                if (pin !== 'AUTO_BIO') setSessionPin(pin);
-                setLastAuthTime(Date.now());
-                setAuthRequest(null);
-                if (onSuccess) onSuccess();
-            } else {
-                alert("PIN Incorrecto");
-            }
-        } catch (e) {
-            alert("PIN Incorrecto o Error de descifrado");
-        }
+    const editNote = (note) => {
+        setEditingNote(note);
+        setView('edit');
     };
 
-    const startAutoLockTimer = () => {
-        if (autoLockTimer.current) clearTimeout(autoLockTimer.current);
-        autoLockTimer.current = setTimeout(() => {
-            if (view === 'edit' && editingNote?.isLocked) {
-                setView('list');
-                setEditingNote(null);
-                setSessionPin(null);
-                alert("Nota bloqueada por inactividad");
-            }
-        }, 2 * 60 * 1000); // 2 minutes
+    const handleChangePin = () => {
+        const newPin = prompt("Ingresa el nuevo PIN (4+ dígitos):");
+        if (!newPin || newPin.length < 4) return alert("PIN no válido");
+        localStorage.setItem('app_pin', newPin);
+        setHasStoredPin(true);
+        alert("PIN actualizado correctamente.");
     };
 
-    const editNote = async (note) => {
-        if (note.isLocked) {
-            // If we have a valid session and the PIN is known, try automatic decryption
-            if (isSessionValid() && sessionPin) {
-                try {
-                    const decryptedContent = await decryptNote(note.encryptedContent, sessionPin);
-                    setEditingNote({ ...note, content: decryptedContent });
-                    setView('edit');
-                    startAutoLockTimer();
-                    return;
-                } catch (e) {
-                    // Fallback to manual unlock if automatic fails
-                }
-            }
-            requireAuth('unlock', note, () => {});
-        } else {
-            // Normal notes open without authentication for viewing
-            setEditingNote({ ...note });
-            setView('edit');
-        }
+    const handleInitialPinSetup = (pin) => {
+        localStorage.setItem('app_pin', pin);
+        setHasStoredPin(true);
+        setAppUnlocked(true);
     };
 
     const exportAsImage = async (note) => {
@@ -304,7 +200,7 @@ const App = () => {
             <div style=${{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-color)' }}>
                 <div style=${{ textAlign: 'center' }}>
                     <${Lucide.Loader2} className="animate-spin" size=${48} style=${{ marginBottom: '16px', color: 'var(--accent)' }} />
-                    <p>Cargando...</p>
+                    <p>Cargando sesión...</p>
                 </div>
             </div>
         `;
@@ -312,56 +208,62 @@ const App = () => {
 
     return html`
         <div style=${{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            ${view === 'list' && html`
-                <${ListView} 
-                    notes=${currentNotes} 
-                    user=${user}
-                    onLogin=${async () => {
-                        try {
-                            await loginGoogle();
-                        } catch (e) {
-                            console.error(e);
-                            if (e.code === 'auth/unauthorized-domain') {
-                                alert("Error: Dominio no autorizado. Debes agregar 'websim.ai' (o el dominio actual) a la lista de 'Dominios autorizados' en tu Consola de Firebase > Authentication > Settings.");
-                            } else {
-                                alert("Error al iniciar sesión: " + e.message);
+            ${!appUnlocked && user ? html`
+                ${!hasStoredPin ? html`
+                    <${LockSetupModal} 
+                        onConfirm=${handleInitialPinSetup}
+                        onCancel=${logout}
+                    />
+                ` : html`
+                    <${UnlockModal} 
+                        onUnlock=${handleUnlock}
+                        onCancel=${logout}
+                    />
+                `}
+            ` : html`
+                ${view === 'list' && html`
+                    <${ListView} 
+                        notes=${user ? currentNotes : []} 
+                        user=${user}
+                        onLogin=${async () => {
+                            try {
+                                await loginGoogle();
+                            } catch (e) {
+                                console.error(e);
+                                if (e.code === 'auth/unauthorized-domain') {
+                                    alert("Error: Dominio no autorizado.");
+                                } else {
+                                    alert("Error al iniciar sesión: " + e.message);
+                                }
                             }
-                        }
-                    }}
-                    onLogout=${logout}
-                    onAdd=${startCreate} 
-                    onEdit=${editNote} 
-                    onDelete=${deleteNote}
-                    onReorder=${reorderNotes}
-                    onUndo=${undo}
-                    hasHistory=${history.length > 0}
-                />
-            `}
-            
-            ${view === 'create-picker' && html`
-                <${TypePicker} 
-                    onSelect=${createNote} 
-                    onCancel=${() => setView('list')} 
-                />
-            `}
+                        }}
+                        onLogout=${logout}
+                        onAdd=${startCreate} 
+                        onEdit=${editNote} 
+                        onDelete=${deleteNote}
+                        onReorder=${reorderNotes}
+                        onUndo=${undo}
+                        hasHistory=${history.length > 0}
+                    />
+                `}
+                
+                ${view === 'create-picker' && html`
+                    <${TypePicker} 
+                        onSelect=${createNote} 
+                        onCancel=${() => setView('list')} 
+                    />
+                `}
 
-            ${view === 'edit' && editingNote && html`
-                <${NoteEditor} 
-                    note=${editingNote} 
-                    onSave=${saveNote} 
-                    onCancel=${() => setView('list')}
-                    onExport=${exportAsImage}
-                    exportRef=${exportRef}
-                />
-            `}
-
-            ${authRequest && html`
-                <${UnlockModal} 
-                    noteTitle=${authRequest.note?.title}
-                    actionType=${authRequest.type}
-                    onUnlock=${handleUnlock}
-                    onCancel=${() => setAuthRequest(null)}
-                />
+                ${view === 'edit' && editingNote && html`
+                    <${NoteEditor} 
+                        note=${editingNote} 
+                        onSave=${saveNote} 
+                        onCancel=${() => setView('list')}
+                        onExport=${exportAsImage}
+                        exportRef=${exportRef}
+                        key=${editingNote.id}
+                    />
+                `}
             `}
         </div>
     `;
