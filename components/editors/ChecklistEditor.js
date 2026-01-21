@@ -51,7 +51,7 @@ export const ChecklistEditor = ({ content, onUpdateItem, onRemoveItem, onAddItem
                 </button>
             </div>
             <div style=${{ display: 'grid', gap: '8px' }}>
-                ${content.map((item, index) => !item.checked && html`
+                ${content.map((item, index) => html`
                     <div 
                         key=${item.id} 
                         draggable=${dragActiveId === item.id}
@@ -73,12 +73,17 @@ export const ChecklistEditor = ({ content, onUpdateItem, onRemoveItem, onAddItem
                             background: '#252525', 
                             padding: '8px 12px', 
                             borderRadius: '12px',
-                            border: '1px solid #333'
+                            border: '1px solid #333',
+                            opacity: item.checked ? 0.5 : 1,
+                            transition: 'opacity 0.2s'
                         }}
                     >
                         <div style=${{ display: 'flex', gap: '8px', alignItems: 'flex-start', flex: '1 1 180px' }}>
-                            <button onClick=${() => onUpdateItem(item.id, 'checked', true)} style=${{ color: 'var(--text-secondary)' }}>
-                                <${Lucide.Square} size=${20} />
+                            <button 
+                                onClick=${() => onUpdateItem(item.id, 'checked', !item.checked)} 
+                                style=${{ color: item.checked ? 'var(--success)' : 'var(--text-secondary)' }}
+                            >
+                                <${item.checked ? Lucide.CheckSquare : Lucide.Square} size=${20} />
                             </button>
                             <textarea 
                                 value=${item.text}
@@ -97,7 +102,9 @@ export const ChecklistEditor = ({ content, onUpdateItem, onRemoveItem, onAddItem
                                     height: 'auto',
                                     lineHeight: '1.2',
                                     padding: '2px 0',
-                                    overflow: 'hidden'
+                                    overflow: 'hidden',
+                                    textDecoration: item.checked ? 'line-through' : 'none',
+                                    color: item.checked ? 'var(--text-secondary)' : 'inherit'
                                 }}
                             />
                         </div>
