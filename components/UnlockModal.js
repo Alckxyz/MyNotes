@@ -1,11 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as Lucide from 'lucide-react';
 import htm from 'htm';
+import { verifyBiometrics } from '../constants.js';
 
 const html = htm.bind(React.createElement);
 
-export const UnlockModal = ({ onUnlock, onCancel }) => {
+export const UnlockModal = ({ onUnlock, onCancel, onBiometricUnlock }) => {
     const [pin, setPin] = useState('');
+    const biometricId = localStorage.getItem('biometric_id');
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    useEffect(() => {
+        if (biometricId && isMobile) {
+            handleBiometric();
+        }
+    }, []);
+
+    const handleBiometric = async () => {
+        if (!biometricId) return;
+        try {
+            const success = await verifyBiometrics(biometricId);
+            if (success) {
+                onBiometricUnlock();
+            }
+        } catch (e) {
+            console.error("Error verifying biometrics", e);
+        }
+    };
 
     const handlePinSubmit = (e) => {
         if (e) e.preventDefault();
@@ -56,13 +77,31 @@ export const UnlockModal = ({ onUnlock, onCancel }) => {
                         type="submit"
                         style=${{ background: 'var(--accent)', padding: '16px', borderRadius: '12px', fontWeight: 'bold' }}
                     >
-                        Desbloquear
+                        Desbloquear con PIN
                     </button>
                 </form>
 
+                ${biometricId && html`
+                    <button 
+                        onClick=${handleBiometric}
+                        style=${{ 
+                            marginTop: '16px', 
+                            width: '100%', 
+                            border: '1px solid var(--accent)', 
+                            padding: '12px', 
+                            borderRadius: '12px', 
+                            color: 'var(--accent)',
+                            display: 'flex',
+                            gap: '8px'
+                        }}
+                    >
+                        <${Lucide.Fingerprint} size=${20} /> Desbloquear con Biometría
+                    </button>
+                `}
+
                 <button 
                     onClick=${onCancel}
-                    style=${{ marginTop: '20px', color: 'var(--text-secondary)', fontSize: '14px' }}
+                    style=${{ marginTop: '24px', color: 'var(--text-secondary)', fontSize: '14px' }}
                 >
                     Cerrar Sesión
                 </button>

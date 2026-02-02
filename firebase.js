@@ -4,7 +4,9 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   onAuthStateChanged,
-  signOut
+  signOut,
+  setPersistence,
+  browserSessionPersistence
 } from "firebase/auth";
 import {
   getFirestore,
@@ -16,7 +18,8 @@ import {
   onSnapshot,
   serverTimestamp,
   query,
-  orderBy
+  orderBy,
+  getDoc
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -32,8 +35,9 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Explicitly set persistence to session only (wiped on tab close/refresh) to ensure "no data in browser"
-auth.setPersistence({ type: 'SESSION' }).catch(console.error);
+// Use session persistence so login is cleared on tab close if desired, 
+// but browserSessionPersistence is usually safer for "no local data" requirement.
+setPersistence(auth, browserSessionPersistence).catch(console.error);
 
 const provider = new GoogleAuthProvider();
 
@@ -46,8 +50,8 @@ export const subscribeToNotes = (uid, callback) => {
   return onSnapshot(q, (snap) => {
     const notes = snap.docs.map(d => ({ 
         ...d.data(),
-        id: d.id, // Firestore ID is primary
-        localId: d.data().id || d.id // Preserve internal logic if needed
+        id: d.id,
+        localId: d.data().id || d.id 
     }));
     callback(notes);
   });
@@ -55,7 +59,6 @@ export const subscribeToNotes = (uid, callback) => {
 
 export const createFirebaseNote = async (uid, noteData) => {
   const notesRef = collection(db, "users", uid, "notes");
-  // Ensure we don't save any undefined fields which Firestore hates
   const cleanData = JSON.parse(JSON.stringify(noteData));
   return await addDoc(notesRef, {
     ...cleanData,
@@ -78,19 +81,17 @@ export const deleteFirebaseNote = async (uid, noteId) => {
   return await deleteDoc(noteRef);
 };
 
-export const updateMasterPinMetadata = async (uid, metadata) => {
-  const userRef = doc(db, "users", uid);
-  return await setDoc(userRef, { masterPinMetadata: metadata }, { merge: true });
+// Security Metadata
+export const getUserSecurity = async (uid) => {
+  const securityRef = doc(db, "users", uid, "security", "main");
+  const snap = await getDoc(securityRef);
+  return snap.exists() ? snap.data() : null;
 };
 
-export const getMasterPinMetadata = async (uid) => {
-  try {
-    const { getDoc } = await import("firebase/firestore");
-    const userRef = doc(db, "users", uid);
-    const snap = await getDoc(userRef);
-    return snap.exists() ? snap.data().masterPinMetadata : null;
-  } catch (e) {
-    console.error("Firebase: Error getting master pin metadata (likely offline):", e);
-    return null;
-  }
+export const setUserSecurity = async (uid, securityData) => {
+  const securityRef = doc(db, "users", uid, "security", "main");
+  return await setDoc(securityRef, {
+    ...securityData,
+    updatedAt: serverTimestamp()
+  });
 };

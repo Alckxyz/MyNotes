@@ -9,7 +9,7 @@ import { LockSetupModal } from './LockSetupModal.js';
 import { TextEditor } from './editors/TextEditor.js';
 import { ChecklistEditor } from './editors/ChecklistEditor.js';
 import { LinkEditor } from './editors/LinkEditor.js';
-import { WorkoutEditor } from './editors/WorkoutEditor.js';
+
 import { TasksEditor } from './editors/TasksEditor.js';
 
 const html = htm.bind(React.createElement);
@@ -21,11 +21,17 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
         settings: note.settings || { ...DEFAULT_SETTINGS }
     };
     
-    // Migration: ensure TEXT note content is an array for the new block editor
+    // Migration: Ensure TEXT note content is handled as a single string (HTML) for the unified editor
     const migratedNote = {
         ...initialNote,
-        content: (initialNote.type === NoteType.TEXT && typeof initialNote.content === 'string') 
-            ? (initialNote.content ? [{ id: Date.now(), type: 'text', text: initialNote.content }] : [])
+        content: (initialNote.type === NoteType.TEXT && Array.isArray(initialNote.content))
+            ? initialNote.content.map(block => {
+                if (block.type === 'subtitle') return `<h3>${block.text}</h3>`;
+                if (block.type === 'bullet') return `<ul><li>${block.text}</li></ul>`;
+                if (block.type === 'number') return `<ol><li>${block.text}</li></ol>`;
+                if (block.type === 'todo') return `<p>${block.checked ? '☑' : '☐'} ${block.text}</p>`;
+                return `<p>${block.text}</p>`;
+            }).join('')
             : initialNote.content
     };
     const [localNote, setLocalNote] = useState(migratedNote);
@@ -221,12 +227,7 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
                     />
                 `}
 
-                ${localNote.type === NoteType.WORKOUT && html`
-                    <${WorkoutEditor} 
-                        content=${localNote.content}
-                        onUpdateContent=${(newContent) => { pushHistory(); updateField('content', newContent); }}
-                    />
-                `}
+
 
                 ${localNote.type === NoteType.TASKS && html`
                     <${TasksEditor} 
@@ -268,30 +269,13 @@ export const NoteEditor = ({ note, onSave, onCancel, onExport, exportRef }) => {
                            `)}
                         </div>
                     `)}
-                    ${localNote.type === NoteType.TEXT && Array.isArray(localNote.content) && localNote.content.map((block, idx) => html`
-                        <div key=${block.id} style=${{ marginBottom: '4px', color: '#000000', lineHeight: '1.1' }}>
-                            ${block.type === 'subtitle' && html`<h3 style=${{ fontSize: '18px', fontWeight: 'bold', color: '#000000', marginBottom: '2px' }}>${block.text}</h3>`}
-                            ${block.type === 'text' && html`<p>${block.text}</p>`}
-                            ${block.type === 'bullet' && html`• ${block.text}`}
-                            ${block.type === 'number' && html`${idx + 1}. ${block.text}`}
-                            ${block.type === 'letter' && html`${String.fromCharCode(97 + (idx % 26))}. ${block.text}`}
-                            ${block.type === 'todo' && html`${block.checked ? '☑' : '☐'} ${block.text}`}
-                            ${block.type === 'copyable' && html`📋 ${block.label ? block.label + ' ' : ''}${block.text}`}
-                        </div>
-                    `)}
-                    ${localNote.type === NoteType.WORKOUT && Array.isArray(localNote.content) && localNote.content.map(routine => html`
-                        <div key=${routine.id} style=${{ marginBottom: '20px' }}>
-                            <h3 style=${{ fontSize: '18px', fontWeight: 'bold', color: '#b45309' }}>${routine.name}</h3>
-                            ${routine.exercises.map(ex => html`
-                                <div key=${ex.id} style=${{ borderBottom: '1px solid #f0f0f0', padding: '8px 0' }}>
-                                    <div style=${{ fontWeight: 'bold', color: '#000000' }}>${ex.name || 'Ejercicio'}</div>
-                                    <div style=${{ fontSize: '14px', color: '#333333' }}>
-                                        ${ex.sets} series x ${ex.reps} reps @ ${ex.weight}kg
-                                    </div>
-                                </div>
-                            `)}
-                        </div>
-                    `)}
+                    ${localNote.type === NoteType.TEXT && typeof localNote.content === 'string' && html`
+                        <div 
+                            style=${{ color: '#000000', lineHeight: '1.2' }}
+                            dangerouslySetInnerHTML=${{ __html: localNote.content }}
+                        ></div>
+                    `}
+
                 </div>
             </div>
         </div>

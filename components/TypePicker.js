@@ -60,13 +60,7 @@ export const TypePicker = ({ onSelect, onCancel }) => {
                     color="#a855f7"
                     onClick=${() => onSelect(NoteType.LINKS)} 
                 />
-                <${TypeButton} 
-                    title="Workout Routine" 
-                    desc="Sets, reps, and weights" 
-                    icon=${html`<${Lucide.Dumbbell} size=${32} />`}
-                    color="#f59e0b"
-                    onClick=${() => onSelect(NoteType.WORKOUT)} 
-                />
+
                 <${TypeButton} 
                     title="Tasks" 
                     desc="Urgency-coded daily tasks" 

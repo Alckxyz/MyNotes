@@ -9,6 +9,15 @@ export const ChecklistEditor = ({ content, onUpdateItem, onRemoveItem, onAddItem
     const [dragActiveId, setDragActiveId] = useState(null);
     const [activeTextId, setActiveTextId] = useState(null);
 
+    // Auto-resize for checklist textareas on load
+    React.useEffect(() => {
+        const textareas = document.querySelectorAll('.checklist-item-textarea');
+        textareas.forEach(ta => {
+            ta.style.height = 'auto';
+            ta.style.height = ta.scrollHeight + 'px';
+        });
+    }, [content]);
+
     const handleQuantityChange = (id, field, value, item) => {
         onUpdateItem(id, field, value);
         // If this is the first time setting a value, set it as original too
@@ -86,6 +95,7 @@ export const ChecklistEditor = ({ content, onUpdateItem, onRemoveItem, onAddItem
                                 <${item.checked ? Lucide.CheckSquare : Lucide.Square} size=${20} />
                             </button>
                             <textarea 
+                                className="checklist-item-textarea"
                                 value=${item.text}
                                 placeholder="Task..."
                                 onChange=${(e) => onUpdateItem(item.id, 'text', e.target.value)}

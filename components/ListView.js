@@ -137,7 +137,7 @@ export const ListView = ({ notes, user, onLogin, onLogout, onAdd, onEdit, onDele
                                         ${note.type === NoteType.TEXT && html`<${Lucide.Type} size=${16} color="var(--accent)" />`}
                                         ${note.type === NoteType.CHECKLIST && html`<${Lucide.CheckSquare} size=${16} color="var(--success)" />`}
                                         ${note.type === NoteType.LINKS && html`<${Lucide.Link} size=${16} color="#a855f7" />`}
-                                        ${note.type === NoteType.WORKOUT && html`<${Lucide.Dumbbell} size=${16} color="#f59e0b" />`}
+
                                         ${note.type === NoteType.TASKS && html`<${Lucide.ListTodo} size=${16} color="#ef4444" />`}
                                         <h3 style=${{ fontSize: '18px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             ${note.title || 'Untitled'}

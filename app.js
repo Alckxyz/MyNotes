@@ -5,7 +5,7 @@ import htm from 'htm';
 import * as Lucide from 'lucide-react';
 
 // New Modular Imports
-import { NoteType, decryptNote } from './constants.js';
+import { NoteType } from './constants.js';
 import { ListView } from './components/ListView.js';
 import { TypePicker } from './components/TypePicker.js';
 import { NoteEditor } from './components/NoteEditor.js';
@@ -34,17 +34,37 @@ const App = () => {
     const [view, setView] = useState('list'); // list, create-picker, edit
     const [editingNote, setEditingNote] = useState(null);
     const [appUnlocked, setAppUnlocked] = useState(false);
-    const [hasStoredPin, setHasStoredPin] = useState(!!localStorage.getItem('app_pin'));
+    const [securityData, setSecurityData] = useState(null); // Metadata from Firestore
+    const [needsSetup, setNeedsSetup] = useState(false);
+    const [sessionMasterKey, setSessionMasterKey] = useState(null);
     const exportRef = useRef(null);
 
-    // Auth monitor
+    // Auth monitor + Security Check
     useEffect(() => {
         return auth.onAuthStateChanged(async (u) => {
             setUser(u);
-            if (!u) {
+            if (u) {
+                setAuthLoading(true);
+                try {
+                    const { getUserSecurity } = await import('./firebase.js');
+                    const sec = await getUserSecurity(u.uid);
+                    if (sec) {
+                        setSecurityData(sec);
+                        setNeedsSetup(false);
+                    } else {
+                        setNeedsSetup(true);
+                    }
+                } catch (e) {
+                    console.error("Error fetching security data:", e);
+                }
+                setAuthLoading(false);
+            } else {
                 setAppUnlocked(false);
+                setSecurityData(null);
+                setNeedsSetup(false);
+                setSessionMasterKey(null);
+                setAuthLoading(false);
             }
-            setAuthLoading(false);
         });
     }, []);
 
@@ -145,11 +165,14 @@ const App = () => {
         }
     };
 
-    const handleUnlock = (pin) => {
-        const stored = localStorage.getItem('app_pin');
-        if (pin === stored) {
+    const handleUnlock = async (pin) => {
+        if (!securityData) return;
+        try {
+            const { decryptMasterKey } = await import('./constants.js');
+            const masterKey = await decryptMasterKey(securityData, pin);
+            setSessionMasterKey(masterKey);
             setAppUnlocked(true);
-        } else {
+        } catch (e) {
             alert("PIN Incorrecto");
         }
     };
@@ -160,16 +183,25 @@ const App = () => {
     };
 
     const handleChangePin = () => {
-        const newPin = prompt("Ingresa el nuevo PIN (4+ dígitos):");
-        if (!newPin || newPin.length < 4) return alert("PIN no válido");
-        localStorage.setItem('app_pin', newPin);
-        setHasStoredPin(true);
-        alert("PIN actualizado correctamente.");
+        // Full pin reset flow: basically triggers setup again or specific update
+        setNeedsSetup(true);
     };
 
-    const handleInitialPinSetup = (pin) => {
-        localStorage.setItem('app_pin', pin);
-        setHasStoredPin(true);
+    const handleInitialPinSetup = async (setupResult) => {
+        // setupResult contains { encryptedPayload, rawMasterKey, biometricId }
+        const { setUserSecurity } = await import('./firebase.js');
+        const { encryptedMasterKey, salt, iv, iterations, rawMasterKey, biometricId } = setupResult;
+        
+        const secPayload = { encryptedMasterKey, salt, iv, iterations };
+        await setUserSecurity(user.uid, secPayload);
+        
+        if (biometricId) {
+            localStorage.setItem('biometric_id', biometricId);
+        }
+        
+        setSecurityData(secPayload);
+        setSessionMasterKey(rawMasterKey);
+        setNeedsSetup(false);
         setAppUnlocked(true);
     };
 
@@ -209,7 +241,7 @@ const App = () => {
     return html`
         <div style=${{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             ${!appUnlocked && user ? html`
-                ${!hasStoredPin ? html`
+                ${needsSetup ? html`
                     <${LockSetupModal} 
                         onConfirm=${handleInitialPinSetup}
                         onCancel=${logout}
@@ -217,6 +249,7 @@ const App = () => {
                 ` : html`
                     <${UnlockModal} 
                         onUnlock=${handleUnlock}
+                        onBiometricUnlock=${() => setAppUnlocked(true)}
                         onCancel=${logout}
                     />
                 `}
