@@ -310,3 +310,5 @@ const App = () => {
 const rootElement = document.getElementById('root');
 const root = createRoot(rootElement);
 root.render(html`<${App} />`);
+
+// commit: ajuste menor para git
